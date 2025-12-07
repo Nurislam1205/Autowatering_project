@@ -1,108 +1,139 @@
-source code
+Below is a clean, technical, **GitHub-style explanation in English**, without embellishment, just facts. Suitable for README or code comments.
 
-#include <LiquidCrystal_I2C.h>
+---
 
-// Инициализация дисплея
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+# Auto Watering System — Code Explanation
 
-// Пины подключения
-const int sensorPin = A0;   // Датчик влажности
-const int relayPin = 7;     // Реле
+This Arduino program implements an automatic soil-moisture-based watering system using:
 
-// Калибровочные значения (ПОМЕНЯЛИ МЕСТАМИ!)
-int dryValue = 320;    // Значение в СУХОЙ почве (маленькое число)
-int wetValue = 620;    // Значение во ВЛАЖНОЙ почве (большое число)
+* **Soil moisture sensor (analog)**
+* **Relay module** controlling a water pump
+* **I2C LCD (16×2)** for on-device status display
 
-int humidityThreshold = 30; // Порог влажности в % (если < 30% - ВКЛЮЧИТЬ насос)
+The system reads soil moisture, converts this value into a percentage, displays it on an LCD, and activates a pump when the soil becomes too dry.
 
-// Переменные для полива
-bool isWatering = false;
-unsigned long wateringStartTime = 0;
-const unsigned long wateringDuration = 5000; // 5 секунд полива
+---
 
-void setup() {
-  Serial.begin(9600);
-  
-  // Инициализация дисплея
-  lcd.init();
-  lcd.backlight();
-  lcd.setCursor(0, 0);
-  lcd.print("Auto Watering");
-  lcd.setCursor(0, 1);
-  lcd.print("System Ready!");
-  delay(2000);
-  lcd.clear();
+## 1. Hardware Components
 
-  // Настройка реле
-  pinMode(relayPin, OUTPUT);
-  digitalWrite(relayPin, HIGH); // Выключить реле
-  
-  Serial.println("System started - FIXED VERSION");
-}
+* **Arduino (any compatible model)**
+* **Soil moisture sensor (analog output)**
+* **Relay module** for pump control
+* **I2C 16×2 LCD** (address `0x27`)
+* **Water pump**
 
-void loop() {
-  // Чтение датчика
-  int sensorValue = analogRead(sensorPin);
-  
-  // Конвертация в проценты (ПРАВИЛЬНАЯ логика)
-  // Чем МЕНЬШЕ значение датчика - тем СУШЕ
-  // Чем БОЛЬШЕ значение датчика - тем ВЛАЖНЕЕ
-  int humidityPercent = map(sensorValue, dryValue, wetValue, 0, 100);
-  humidityPercent = constrain(humidityPercent, 0, 100);
-  
-  // Вывод на дисплей
-  lcd.setCursor(0, 0);
-  lcd.print("Moisture: ");
-  lcd.print(humidityPercent);
-  lcd.print("%  ");
-  
-  // Отладочная информация в Serial
-  Serial.print("Sensor: ");
-  Serial.print(sensorValue);
-  Serial.print(" | Humidity: ");
-  Serial.print(humidityPercent);
-  Serial.print("% | Status: ");
-  
-  // Логика полива (ИСПРАВЛЕННАЯ)
-  if (isWatering) {
-    lcd.setCursor(0, 1);
-    lcd.print("WATERING...    ");
-    Serial.println("WATERING");
-    
-    // Проверяем время полива
-    if (millis() - wateringStartTime >= wateringDuration) {
-      stopWatering();
-      isWatering = false;
-      lcd.setCursor(0, 1);
-      lcd.print("Watering Done!");
-      delay(2000);
-    }
-  } else {
-    // ЕСЛИ влажность МЕНЬШЕ порога - ВКЛЮЧАЕМ полив
-    if (humidityPercent > humidityThreshold) {
-      lcd.setCursor(0, 1);
-      lcd.print("TOO DRY! PUMP ON");
-      Serial.println("TOO DRY - STARTING PUMP");
-      delay(1000);
-      startWatering();
-      isWatering = true;
-      wateringStartTime = millis();
-    } else {
-      lcd.setCursor(0, 1);
-      lcd.print("Soil OK :)    ");
-      Serial.println("OK");
-    }
-  }
-  
-  delay(1000);
-}
+Pins:
 
-void startWatering() {
-  digitalWrite(relayPin, LOW); // Включить реле
-  Serial.println("PUMP: ON");
-}
+| Component | Arduino Pin |
+| --------- | ----------- |
+| Sensor    | A0          |
+| Relay     | 7           |
 
-void stopWatering() {
-  digitalWrite(relayPin, HIGH); // Выключить реле
-  Serial.println("PUMP: OFF");
-}
+---
+
+## 2. Calibration Values
+
+Two calibration points are used:
+
+* `dryValue = 320` → sensor reading in dry soil
+* `wetValue = 620` → sensor reading in wet soil
+
+The raw sensor output is mapped to a **0–100% moisture scale** with:
+
+```cpp
+int humidityPercent = map(sensorValue, dryValue, wetValue, 0, 100);
+```
+
+Then constrained:
+
+```cpp
+humidityPercent = constrain(humidityPercent, 0, 100);
+```
+
+---
+
+## 3. Watering Logic
+
+The system waters the soil only when:
+
+```
+humidityPercent < humidityThreshold
+```
+
+`humidityThreshold` is set to **30%**.
+
+Once watering begins:
+
+* The relay is switched **ON** (LOW signal).
+* Watering continues for a fixed duration (`wateringDuration = 5000 ms`).
+* After timeout, the relay switches **OFF**.
+
+A state variable `isWatering` prevents repeated triggering during watering.
+
+---
+
+### Watering cycle summary
+
+1. Soil moisture < threshold → pump starts.
+2. Pump runs for **5 seconds**.
+3. Pump stops automatically.
+4. System continues monitoring every second.
+
+---
+
+## 4. LCD Output
+
+The LCD shows:
+
+**Line 1:**
+
+```
+Moisture: XX%
+```
+
+**Line 2:** Depending on state:
+
+* `"WATERING..."` while pump is active
+* `"TOO DRY! PUMP ON"` when starting watering
+* `"Watering Done!"` after completing a cycle
+* `"Soil OK :)"` when moisture is above threshold
+
+---
+
+## 5. Serial Output
+
+For debugging:
+
+* Raw sensor value
+* Calculated humidity %
+* Current status: OK, TOO DRY, WATERING, PUMP ON/OFF
+
+Example:
+
+```
+Sensor: 410 | Humidity: 45% | Status: OK
+```
+
+---
+
+## 6. Functions Overview
+
+### `startWatering()`
+
+Activates the relay (LOW level) and prints `PUMP: ON`.
+
+### `stopWatering()`
+
+Deactivates the relay (HIGH level) and prints `PUMP: OFF`.
+
+### `loop()`
+
+Main logic:
+
+* Read sensor
+* Compute moisture %
+* Update LCD
+* Decide whether to start/stop watering
+
+---
+
